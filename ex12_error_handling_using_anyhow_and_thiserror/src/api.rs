@@ -46,6 +46,9 @@ pub enum AppError {
     #[error("Post with ID {0} was not found")]
     NotFound(u32),
 
+    #[error("Invalid input: {0}")]
+    BadRequest(String),
+
     #[error("External API error: {0}")]
     ExternalApi(String),
 
@@ -59,6 +62,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error_message) = match self {
             AppError::NotFound(id) => (StatusCode::NOT_FOUND, format!("Post {} not found", id)),
+            AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg),
             AppError::ExternalApi(msg) => (StatusCode::BAD_GATEWAY, msg),
             // We don't want to leak internal system details to users, so we give a generic message
             AppError::Unexpected(_) => (

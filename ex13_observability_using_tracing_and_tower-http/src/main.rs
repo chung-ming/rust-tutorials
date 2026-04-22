@@ -84,6 +84,14 @@ async fn health_check() -> &'static str {
 // Connects to api.rs and uses the 'id' from the URL
 // Returns the custom AppError
 async fn get_post(Path(id): Path<u32>) -> Result<Json<Post>, AppError> {
+    if id == 0 {
+        tracing::warn!("Rejecting request for invalid ID: 0");
+        return Err(AppError::BadRequest(format!(
+            "ID {} is not a positive integer",
+            id
+        )));
+    }
+
     match api::fetch_external_post(id).await {
         Ok(post) => {
             tracing::info!("Serving: {}", post.summarize());
