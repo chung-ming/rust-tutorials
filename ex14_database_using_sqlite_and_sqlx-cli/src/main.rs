@@ -9,6 +9,7 @@ use axum::{
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 // Set up a "Subscriber" at the very beginning of the `main` function. This is the part that
 // actually decides where the logs go (usually your terminal).
@@ -29,6 +30,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 struct AppState {
     db: SqlitePool,
     visitor_count: Mutex<u32>,
+    http_client: reqwest::Client,
 }
 
 // Transform the main.rs into a web server listener.
@@ -56,10 +58,20 @@ async fn main() {
         .await
         .expect("Failed to connect to SQLite");
 
+    // Build a client with a 35-second timeout
+    let http_client = reqwest::Client::builder()
+        // 5-secs for the connection (TCP handshake)
+        .connect_timeout(Duration::from_secs(5))
+        // 30-secs for the connection + wait time for the response body
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client");
+
     // Wrap the state in an Arc so it can be shared across cores
     let shared_state = Arc::new(AppState {
         db: pool,
         visitor_count: Mutex::new(0),
+        http_client,
     });
 
     let app = Router::new()
@@ -127,7 +139,7 @@ async fn get_post(
 
     // 2. Fetch from API if not found
     tracing::warn!("Cache Miss for post {}. Fetching from external API...", id);
-    let post = match api::fetch_external_post(id).await {
+    let post = match api::fetch_external_post(&state.http_client, id).await {
         Ok(post) => {
             tracing::info!("Serving: {}", post.summarize());
             post // Yield the post object to the variable post

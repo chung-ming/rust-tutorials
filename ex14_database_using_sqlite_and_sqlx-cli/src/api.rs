@@ -79,11 +79,15 @@ impl IntoResponse for AppError {
 }
 
 // An asynchronous function to fetch a post from an external source
-pub async fn fetch_external_post(id: u32) -> Result<Post, AppError> {
+pub async fn fetch_external_post(client: &reqwest::Client, id: u32) -> Result<Post, AppError> {
     let url = format!("https://jsonplaceholder.typicode.com/posts/{id}");
 
-    // Using reqwest to get JSON and auto parse it into our Post struct
-    let response = reqwest::get(url)
+    // Get JSON and auto parse it into our Post struct
+    let response = client
+        .get(&url)
+        // .send() returns a future that performs the HTTP request, and then you
+        // .await the future
+        .send()
         .await
         // Use .context("string") for static messages
         .context("Attempting to reach the external JSON Placeholder API")
