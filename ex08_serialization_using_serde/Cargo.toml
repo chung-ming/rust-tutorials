@@ -1,0 +1,11 @@
+[package]
+name = "ex08_serialization_using_serde"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"
+# We add "json" to reqwest's features
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+# Serde with the 'derive' feature allows us to use #[derive(Deserialize)]
+serde = { version = "1.0", features = ["derive"] }

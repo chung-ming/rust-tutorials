@@ -1,0 +1,7 @@
+[package]
+name = "ex04_random_number_generator_using_rand"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"

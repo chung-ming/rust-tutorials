@@ -1,0 +1,11 @@
+[package]
+name = "ex11_shared_state_using_arc_and_mutex"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"

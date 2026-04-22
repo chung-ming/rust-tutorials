@@ -1,0 +1,12 @@
+[package]
+name = "ex10_web_framework_using_axum"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8"
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+# axum is a high-level web framework
+axum = "0.7"

@@ -1,0 +1,23 @@
+# --- IDEs ---
+.vscode/
+.idea/
+
+# --- Environment Variables ---
+.env
+.env.local
+.env.*
+
+# --- Databases ---
+*.db
+*.db-journal
+*.db-wal
+dump.rdb
+
+# --- Logs and Temporary Files ---
+*.log
+**/target/
+**/*.rs.bk
+
+# --- OS Files ---
+.DS_Store
+Thumbs.db
