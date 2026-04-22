@@ -35,7 +35,7 @@ impl Summary for Post {
 }
 
 // This is the "Professional" way because:
-// 1. Clarity: Instead of a Generic Error, there is a clar list of everything that can go wrong.
+// 1. Clarity: Instead of a Generic Error, there is a clear list of everything that can go wrong.
 // 2. Automatic Conversion: Because we used `#[from] anyhow::Error`, Rust auto converts an
 // unexpected error into `ApiError::Unexpected` when you use the `?` operator.
 // 3. Performance: Unlike exceptions in other languages, these are just Enums. There is no
