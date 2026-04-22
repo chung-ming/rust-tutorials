@@ -6,6 +6,7 @@ use axum::{
     extract::{Path, State},
     routing::get,
 };
+use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
@@ -24,7 +25,9 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 // this for our own error type, we can control exactly what HTTP status code and message the user gets.
 
 // Create a struct to hold our "Global State"
+// 1. Updated State to hold the DB Pool
 struct AppState {
+    db: SqlitePool,
     visitor_count: Mutex<u32>,
 }
 
@@ -35,7 +38,7 @@ async fn main() {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new("info"));
 
-    // 1. Initialize the logger
+    // Initialize the logger
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer())
@@ -43,8 +46,19 @@ async fn main() {
 
     tracing::info!("====== Example 14: Database using SQLite and SQLx-CLI ======");
 
+    // 2. Load the .env file into the process environment
+    // .ok() ignores the error if the file is missing
+    dotenvy::dotenv().ok();
+
+    // 3. Connect to the SQLite DB defined in your .env
+    let db_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let pool = SqlitePool::connect(&db_url)
+        .await
+        .expect("Failed to connect to SQLite");
+
     // Wrap the state in an Arc so it can be shared across cores
     let shared_state = Arc::new(AppState {
+        db: pool,
         visitor_count: Mutex::new(0),
     });
 
@@ -55,7 +69,7 @@ async fn main() {
         .route("/post/:id", get(get_post))
         // Share the state with all routes
         .with_state(shared_state)
-        // 2. Add the TraceLayer to your router
+        // Add the TraceLayer to your router
         // This wraps every route in a logger
         // `tracing` keeps track of which logs belong to which request (and which user)
         // `tracing` is designed to be extremely low-overhead.
@@ -74,6 +88,7 @@ async fn handler(State(state): State<Arc<AppState>>) -> String {
     // Lock the mutex to update the counter
     let mut count = state.visitor_count.lock().unwrap();
     *count += 1;
+    tracing::info!("Visitor #{} has arrived!", count);
     format!("You are visitor number {}!", count)
 }
 
@@ -83,16 +98,59 @@ async fn health_check() -> &'static str {
 
 // Connects to api.rs and uses the 'id' from the URL
 // Returns the custom AppError
-async fn get_post(Path(id): Path<u32>) -> Result<Json<Post>, AppError> {
-    match api::fetch_external_post(id).await {
+async fn get_post(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<u32>,
+) -> Result<Json<Post>, AppError> {
+    if id == 0 {
+        tracing::warn!("Rejecting request for invalid ID: 0");
+        return Err(AppError::BadRequest(format!(
+            "ID {} is not a positive integer",
+            id
+        )));
+    }
+
+    // 1. Check SQLite first
+    let cached_post = sqlx::query_as!(
+        Post,
+        "SELECT id as \"id: u32\", title, body FROM posts WHERE id = ?",
+        id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|e| anyhow::anyhow!("Database error: {}", e))?;
+
+    if let Some(post) = cached_post {
+        tracing::info!("Cache Hit for post {}", id);
+        return Ok(Json(post));
+    }
+
+    // 2. Fetch from API if not found
+    tracing::warn!("Cache Miss for post {}. Fetching from external API...", id);
+    let post = match api::fetch_external_post(id).await {
         Ok(post) => {
             tracing::info!("Serving: {}", post.summarize());
-            Ok(Json(post))
+            post // Yield the post object to the variable post
         }
         Err(e) => {
             // tracing::error! makes this stand out in your logs
             tracing::error!(error.details = ?e, "Failed to fetch post");
-            Err(e)
+            // Exit the function early because we can't proceed without a post
+            return Err(e);
         }
-    }
+    };
+
+    // 3. Persist to SQLite for future visitors
+    sqlx::query!(
+        "INSERT INTO posts (id, title, body) VALUES (?, ?, ?)",
+        post.id,
+        post.title,
+        post.body
+    )
+    .execute(&state.db)
+    .await
+    .map_err(|e| anyhow::anyhow!("Failed to persist post: {}", e))?;
+
+    // 4. Final return
+    Ok(Json(post))
 }
